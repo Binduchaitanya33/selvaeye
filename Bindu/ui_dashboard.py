@@ -6,7 +6,6 @@ from PIL import Image
 from datetime import datetime
 from io import BytesIO
 
-from style_utils import apply_global_styles
 from data_utils import make_sample, safe_load_uploaded_csv, default_thresholds, generate_violations
 from avatar_utils import make_flat_avatar
 from simulator import create_worker_scene, init_sim_state
@@ -21,92 +20,9 @@ except Exception:
     DETECTOR_AVAILABLE = False
 
 
-def _inject_local_overrides():
-    """
-    Inject CSS overrides for:
-      - Alerts / violation placeholders (light bg, black text)
-      - Buttons (background, hover)
-      - Improve general contrast for faint content seen previously
-    This keeps sidebar styling intact while improving readability in the main area.
-    """
-    css = """
-    <style>
-    /* Alerts area: lighter background, black text */
-    .alerts-area {
-        background: #fff8e6 !important;  /* very light warm tone */
-        border: 1px solid rgba(0,0,0,0.04) !important;
-        color: #0b0b0b !important;
-        padding: 14px !important;
-        border-radius: 10px !important;
-    }
-    /* Violation placeholder box (single-line hint) */
-    .violation-placeholder {
-        background: #fffaf0;
-        border-radius: 8px;
-        padding: 12px 16px;
-        color: #0b0b0b;
-        border: 1px solid rgba(11, 18, 32, 0.04);
-        font-weight: 500;
-    }
-
-    /* Button styling: subtle glossy pill buttons with hover */
-    button.stButton > button {
-        background: linear-gradient(180deg, #3578f6 0%, #0d64d6 100%) !important;
-        color: white !important;
-        border-radius: 10px !important;
-        padding: 8px 14px !important;
-        box-shadow: 0 6px 18px rgba(10, 60, 200, 0.12) !important;
-        border: none !important;
-        transition: transform .12s ease, box-shadow .12s ease, opacity .12s ease;
-    }
-    button.stButton > button:hover {
-        transform: translateY(-2px) !important;
-        box-shadow: 0 10px 30px rgba(10,60,200,0.16) !important;
-        opacity: 0.98;
-    }
-
-    /* Secondary (outline) style for disabled / less-prominent actions */
-    .stButton button[disabled] {
-        background: linear-gradient(180deg,#e6eefb,#f7f9ff) !important;
-        color: #7b7f86 !important;
-        border-radius: 8px !important;
-        box-shadow: none !important;
-    }
-
-    /* Improve faint / low-contrast text in content area */
-    .stApp .stText, .stApp .stMarkdown, .stApp .stDataFrame {
-        color: #0b1220 !important;
-    }
-
-    /* Metric / KPI cards contrast improvement */
-    .card { box-shadow: 0 12px 40px rgba(11,18,32,0.06) !important; }
-
-    /* Make the dashboard headings more visible */
-    .stApp .stMarkdown h1, .stApp .stMarkdown h2, .stApp .stMarkdown h3 {
-        text-shadow: 0 2px 8px rgba(124,58,237,0.04);
-    }
-
-    /* Keep sidebar text colors untouched (so sidebar remains same) */
-    [data-testid="stSidebar"] * { color: inherit !important; }
-
-    /* Small responsive tweaks for images and simulated scene area */
-    img { max-width: 100% !important; height: auto !important; }
-
-    </style>
-    """
-    st.markdown(css, unsafe_allow_html=True)
-
-
 def show_dashboard(go):
-    apply_global_styles()
-    # then apply the small local overrides to enforce alert colors & button styling
-    _inject_local_overrides()
-
-    # Header
-    col1, col2 = st.columns([0.8, 0.2])
-    with col1:
-        st.title("👁️‍🗨️ SafetyEye — Occupancy & Safety Monitor (MVP)")
-        st.markdown("_Demo dashboard using simulated logs or uploaded CSV. No model needed._")
+    st.title("SafetyEye — Dashboard")
+    st.caption("Occupancy monitoring demo using simulated logs or uploaded CSV.")
     # # Right header column: use a lightweight text badge instead of external image
     # with col2:
     #     st.markdown("<div style='text-align:right; padding-top:8px; font-weight:700; color:#444;'></div>", unsafe_allow_html=True)
@@ -114,7 +30,7 @@ def show_dashboard(go):
     # st.divider()
 
     # Sidebar inputs
-    st.sidebar.header("Controls & Inputs")
+    st.sidebar.header("Dashboard Controls")
     mode = st.sidebar.radio("Mode", ["Simulated Stream", "Upload CSV / Logs", "Single Image (preview)"])
 
     st.sidebar.subheader("Zone Thresholds (people)")
@@ -249,13 +165,13 @@ def show_dashboard(go):
         compliance_rate = 100.0 if latest.empty else max(0.0, 100.0 - (total_violations / len(latest) * 100.0))
 
         with k1:
-            st.markdown(f'<div class="card"><div class="kpi">{total_people} <span class="small">people now</span></div></div>', unsafe_allow_html=True)
+            st.metric("People now", total_people)
         with k2:
-            st.markdown(f'<div class="card"><div class="kpi">{total_violations} <span class="small">zones over limit</span></div></div>', unsafe_allow_html=True)
+            st.metric("Zones over limit", total_violations)
         with k3:
-            st.markdown(f'<div class="card"><div class="kpi">{compliance_rate:.0f}% <span class="small">compliance</span></div></div>', unsafe_allow_html=True)
+            st.metric("Compliance", f"{compliance_rate:.0f}%")
 
-        st.markdown("### Occupancy — People View")
+        st.subheader("Occupancy — People View")
 
         if not latest.empty:
             color_palette = [
@@ -270,7 +186,7 @@ def show_dashboard(go):
             for zone in latest.index:
                 cnt = int(latest[zone]) if zone in latest.index else 0
                 with st.container():
-                    st.markdown(f"<div class='zone-title'>{zone} — {cnt} people</div>", unsafe_allow_html=True)
+                    st.markdown(f"#### {zone} — {cnt} people")
                     if cnt <= 0:
                         st.write("No people detected in this zone.")
                         continue
@@ -295,7 +211,7 @@ def show_dashboard(go):
         else:
             st.info("No timeline / occupancy data available.")
 
-        st.markdown("### Latest Zone Snapshot")
+        st.subheader("Latest Zone Snapshot")
         if not latest.empty:
             snap = latest.reset_index().rename(columns={'people_count':'current_count'})
             snap['threshold'] = snap['zone'].map(thresholds).fillna(999).astype(int)
@@ -304,19 +220,16 @@ def show_dashboard(go):
         else:
             st.info("No zone snapshot available (no data).")
 
-        st.markdown("### Violation Log")
+        st.subheader("Violation Log")
         violations_df = generate_violations(df, thresholds)
         if not violations_df.empty:
             st.dataframe(violations_df)
         else:
-            # show a styled placeholder with black text (our CSS ensures color)
-            st.markdown('<div class="violation-placeholder">No active violations detected.</div>', unsafe_allow_html=True)
+            st.info("No active violations detected.")
 
     # ---- Right column (controls, live monitor, detection output) ----
     with right:
-        if st.button('← Home', key='back_home'):
-            go('home')
-        st.markdown("### Live Monitor")
+        st.subheader("Live Monitor")
 
         # show layout image if uploaded
         if layout_img:
@@ -331,15 +244,12 @@ def show_dashboard(go):
             pass
 
         st.markdown("---")
-        # Alerts area with light background and dark text (CSS applied)
-        st.markdown('<div class="alerts-area">', unsafe_allow_html=True)
         st.markdown("### Alerts")
         if not violations_df.empty:
             for _, r in violations_df.iterrows():
-                # use st.markdown so color inherits alerts-area CSS (we still show st.error lines for severity)
-                st.markdown(f"<div style='padding:6px 0; color:#0b0b0b;'>{r['timestamp']} — {r['zone']}: {r['message']}</div>", unsafe_allow_html=True)
+                st.warning(f"{r['timestamp']} — {r['zone']}: {r['message']}")
         else:
-            st.markdown('<div class="violation-placeholder">All zones within thresholds ✅</div>', unsafe_allow_html=True)
+            st.success("All zones within thresholds")
 
         st.markdown("### Quick Actions")
         if not violations_df.empty:
@@ -347,7 +257,6 @@ def show_dashboard(go):
             st.download_button("Download violation log CSV", data=csv_bytes, file_name="violations.csv", mime="text/csv")
         else:
             st.button("No violations to export", disabled=True)
-        st.markdown('</div>', unsafe_allow_html=True)
 
         # -----------------------------
         # Detection result area (if detection was requested)

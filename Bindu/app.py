@@ -1,38 +1,24 @@
-"""
-app.py
-Lightweight router for the refactored SafetyEye Streamlit app.
+"""Streamlit entrypoint for SafetyEye.
 
-Responsibilities:
-- Page routing (home <-> dashboard)
-- Minimal global session-state initialization
-- Friendly error handling if a UI module fails to import
-- Small status info (model weights existence) in the sidebar (non-intrusive)
+This file intentionally keeps UI routing simple:
+- A basic sidebar navigation (Home / Dashboard / Accuracy)
+- Minimal session-state initialization
+- Friendly error display if a page fails to load
 """
 
-import streamlit as st
-import os
 import traceback
 
-st.set_page_config(page_title="SafetyEye Dashboard", layout="wide", initial_sidebar_state="expanded")
+import streamlit as st
+
+st.set_page_config(page_title="SafetyEye", layout="wide", initial_sidebar_state="expanded")
 
 # -------------------------
 # Minimal session-state defaults
 # -------------------------
-st.session_state.setdefault("page", "home")
+st.session_state.setdefault("page", "Home")
 st.session_state.setdefault("violation_log", [])   # persisted violations across session
 st.session_state.setdefault("sim_logs", [])        # simulator logs
 st.session_state.setdefault("sim_total", 0)        # simulator total violations
-
-# -------------------------
-# Helper: simple model-file status
-# (Do NOT import detector or load model here — keep the router lightweight)
-# -------------------------
-def model_weights_exist(path: str = "runs/detect/train/weights/best.pt") -> bool:
-    """Return True if the typical trained weights file exists on disk."""
-    try:
-        return os.path.exists(path)
-    except Exception:
-        return False
 
 
 # -------------------------
@@ -44,43 +30,34 @@ def go(page_name: str):
 
 
 # -------------------------
-# Top-level sidebar / quick status
+# Sidebar navigation (simple)
 # -------------------------
 with st.sidebar:
-    st.markdown("## SafetyEye — Status")
-    weights_found = model_weights_exist()
-    if weights_found:
-        st.success("Model weights found (best.pt)")
-    else:
-        st.info("Model weights not found — training or model integration pending")
-        st.caption("Expected path: runs/detect/train/weights/best.pt")
-
-    st.markdown("---")
-    st.markdown("Navigation")
-    if st.button("Home"):
-        go("home")
-    if st.button("Dashboard"):
-        go("dashboard")
-    if st.button("📊 Accuracy"):
-        go("accuracy")
+    st.title("SafetyEye")
+    selection = st.radio(
+        "Menu",
+        ["Home", "Dashboard", "Accuracy"],
+        index=["Home", "Dashboard", "Accuracy"].index(st.session_state.get("page", "Home"))
+        if st.session_state.get("page", "Home") in ["Home", "Dashboard", "Accuracy"]
+        else 0,
+    )
+    if selection != st.session_state.get("page"):
+        go(selection)
 
 # -------------------------
 # Main router
 # -------------------------
 def main():
-    page = st.session_state.get("page", "home")
+    page = st.session_state.get("page", "Home")
 
     try:
-        if page == "home":
-            # load and show home view
+        if page == "Home":
             from ui_home import show_home  # dynamic import so app.py stays lightweight
             show_home(go)
-        elif page == "accuracy":
-            # load and show accuracy metrics view
+        elif page == "Accuracy":
             from ui_accuracy import show_accuracy
             show_accuracy(go)
         else:
-            # load and show dashboard view
             from ui_dashboard import show_dashboard
             show_dashboard(go)
 
