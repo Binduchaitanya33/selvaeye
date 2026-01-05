@@ -1,0 +1,19 @@
+nc: 10
+names:
+  0: Hardhat
+  1: Mask
+  2: NO_Hardhat
+  3: NO_Mask
+  4: NO_Safety_Vest
+  5: Person
+  6: Safety_Cone
+  7: Safety_Vest
+  8: machinery
+  9: vehicle
+
+# Data paths now relative to Bindu folder
+train: css-data/train/images
+val: css-data/valid/images
+test: css-data/test/images
+
+
