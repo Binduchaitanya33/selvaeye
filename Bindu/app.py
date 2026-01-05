@@ -34,6 +34,7 @@ def go(page_name: str):
 # -------------------------
 with st.sidebar:
     st.title("SafetyEye")
+
     selection = st.radio(
         "Menu",
         ["Home", "Dashboard", "Accuracy"],
