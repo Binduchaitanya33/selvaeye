@@ -1,4 +1,11 @@
-nc: 10
+# ppe_data.yaml  (FINAL – CORRECT)
+
+path: css-data
+
+train: train/images
+val: valid/images
+test: test/images   # optional
+
 names:
   0: Hardhat
   1: Mask
@@ -10,10 +17,3 @@ names:
   7: Safety_Vest
   8: machinery
   9: vehicle
-
-# Data paths now relative to Bindu folder
-train: css-data/train/images
-val: css-data/valid/images
-test: css-data/test/images
-
-

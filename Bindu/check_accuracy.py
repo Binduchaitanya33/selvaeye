@@ -1,26 +1,26 @@
 """
 check_accuracy.py
-Quick script to check model accuracy from command line.
+Accurate validation script for YOLOv11 models.
 
 Usage:
     python check_accuracy.py
-    python check_accuracy.py --split test
-    python check_accuracy.py --weights path/to/weights.pt
+    python check_accuracy.py --weights runs/detect/train/weights/best.pt
+    python check_accuracy.py --data css-data.yaml
 """
 
 import argparse
 import os
 import sys
+import yaml
 
 from ultralytics import YOLO
 
-# Default paths
+# ✅ MUST MATCH TRAINING
 DEFAULT_WEIGHTS = "runs/detect/train/weights/best.pt"
 DEFAULT_DATA = "ppe_data.yaml"
 
 
 def print_separator(title: str = ""):
-    """Print a formatted separator line."""
     width = 60
     if title:
         padding = (width - len(title) - 2) // 2
@@ -29,119 +29,118 @@ def print_separator(title: str = ""):
         print("=" * width)
 
 
-def format_percentage(value: float) -> str:
-    """Format value as percentage."""
-    return f"{value * 100:.2f}%"
+def pct(x: float) -> str:
+    return f"{x * 100:.2f}%"
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Check SafetyEye model accuracy")
-    parser.add_argument(
-        "--weights", "-w",
-        default=DEFAULT_WEIGHTS,
-        help=f"Path to model weights (default: {DEFAULT_WEIGHTS})"
-    )
-    parser.add_argument(
-        "--data", "-d",
-        default=DEFAULT_DATA,
-        help=f"Path to data YAML (default: {DEFAULT_DATA})"
-    )
-    parser.add_argument(
-        "--split", "-s",
-        choices=["val", "test"],
-        default="val",
-        help="Dataset split to validate on (default: val)"
-    )
-    parser.add_argument(
-        "--verbose", "-v",
-        action="store_true",
-        help="Show verbose output"
-    )
-    
+    parser = argparse.ArgumentParser(description="YOLOv11 Accuracy Checker")
+    parser.add_argument("--weights", "-w", default=DEFAULT_WEIGHTS)
+    parser.add_argument("--data", "-d", default=DEFAULT_DATA)
+    parser.add_argument("--split", "-s", default="val", choices=["val", "test"])
+    parser.add_argument("--verbose", "-v", action="store_true")
     args = parser.parse_args()
-    
-    # Check files exist
+
+    # ----------------- File checks -----------------
     if not os.path.exists(args.weights):
-        print(f"❌ Error: Weights file not found: {args.weights}")
-        print("   Train your model first using: python train_yolo.py")
+        print(f"❌ Weights not found: {args.weights}")
         return 1
-    
+
     if not os.path.exists(args.data):
-        print(f"❌ Error: Data YAML not found: {args.data}")
+        print(f"❌ Data YAML not found: {args.data}")
         return 1
-    
-    print_separator("SafetyEye Model Accuracy Check")
-    print(f"\n📂 Weights: {args.weights}")
-    print(f"📂 Data:    {args.data}")
-    print(f"📂 Split:   {args.split}")
-    
-    # Load model
+
+    # ----------------- Load YAML -----------------
+    with open(args.data, "r") as f:
+        data_yaml = yaml.safe_load(f)
+
+    yaml_names = data_yaml.get("names", [])
+    # Handle both dict and list formats
+    if isinstance(yaml_names, dict):
+        yaml_names = [yaml_names[i] for i in sorted(yaml_names.keys())]
+    num_classes = len(yaml_names)
+
+    print_separator("YOLOv11 Model Accuracy Check")
+    print(f"📦 Weights: {args.weights}")
+    print(f"📄 Dataset: {args.data}")
+    print(f"📊 Split:   {args.split}")
+
+    print("\n📋 Classes from YAML:")
+    for i, n in enumerate(yaml_names):
+        print(f"   {i}: {n}")
+
+    # ----------------- Load model -----------------
     print("\n⏳ Loading model...")
-    try:
-        model = YOLO(args.weights)
-        print(f"✅ Model loaded successfully")
-    except Exception as e:
-        print(f"❌ Failed to load model: {e}")
-        return 1
-    
-    # Show class names
-    if hasattr(model, 'names'):
-        print(f"\n📋 Classes ({len(model.names)}):")
-        for idx, name in model.names.items():
-            print(f"   {idx}: {name}")
-    
-    # Run validation
+    model = YOLO(args.weights)
+    print("✅ Model loaded")
+
+    print("\n📋 Classes from Model:")
+    for i, n in model.names.items():
+        print(f"   {i}: {n}")
+
+    # ----------------- Validation -----------------
     print_separator("Running Validation")
-    print("⏳ This may take a moment...")
-    
-    try:
-        results = model.val(data=args.data, split=args.split, verbose=args.verbose)
-    except Exception as e:
-        print(f"❌ Validation failed: {e}")
-        return 1
-    
-    # Display results
+    print("⏳ Validating...")
+
+    results = model.val(
+        data=args.data,
+        split=args.split,
+        imgsz=640,
+        conf=0.25,
+        iou=0.6,
+        verbose=args.verbose
+    )
+
+    # ----------------- Metrics -----------------
     print_separator("Results")
-    
-    if hasattr(results, 'box'):
-        print(f"\n🎯 Overall Metrics:")
-        print(f"   • mAP@50:      {format_percentage(results.box.map50)}")
-        print(f"   • mAP@50-95:   {format_percentage(results.box.map)}")
-        print(f"   • Precision:   {format_percentage(results.box.mp)}")
-        print(f"   • Recall:      {format_percentage(results.box.mr)}")
-        
-        # Per-class metrics
-        if hasattr(results.box, 'ap50') and hasattr(model, 'names'):
-            print(f"\n📊 Per-Class AP@50:")
-            ap50_list = results.box.ap50.tolist()
-            for idx, (class_name, ap) in enumerate(zip(model.names.values(), ap50_list)):
-                bar_length = int(ap * 20)  # 20 char max bar
-                bar = "█" * bar_length + "░" * (20 - bar_length)
-                status = "✅" if ap >= 0.7 else "⚠️" if ap >= 0.5 else "❌"
-                print(f"   {status} {class_name:20} {bar} {format_percentage(ap)}")
-        
-        # Summary
-        print_separator("Summary")
-        avg_ap = results.box.map50
-        if avg_ap >= 0.7:
-            print(f"\n✅ Model accuracy is GOOD (mAP@50: {format_percentage(avg_ap)})")
-        elif avg_ap >= 0.5:
-            print(f"\n⚠️ Model accuracy is MODERATE (mAP@50: {format_percentage(avg_ap)})")
-            print("   Consider training for more epochs to improve accuracy.")
+
+    box = results.box
+
+    print("\n🎯 Overall Metrics:")
+    print(f"   • Precision:   {pct(box.mp)}")
+    print(f"   • Recall:      {pct(box.mr)}")
+    print(f"   • mAP@50:      {pct(box.map50)}")
+    print(f"   • mAP@50-95:   {pct(box.map)}")
+
+    # ----------------- Per-class AP -----------------
+    print("\n📊 Per-Class AP@50:")
+    ap50 = box.ap50.tolist()
+
+    for i in range(num_classes):
+        name = yaml_names[i]
+        ap = ap50[i]
+        bar_len = int(ap * 20)
+        bar = "█" * bar_len + "░" * (20 - bar_len)
+
+        if ap >= 0.75:
+            status = "✅"
+        elif ap >= 0.5:
+            status = "⚠️"
         else:
-            print(f"\n❌ Model accuracy is LOW (mAP@50: {format_percentage(avg_ap)})")
-            print("   Recommended: Train for more epochs or check your dataset.")
+            status = "❌"
+
+        print(f"   {status} {name:20} {bar} {pct(ap)}")
+
+    # ----------------- Final verdict -----------------
+    print_separator("Final Verdict")
+
+    if box.map50 >= 0.8:
+        print(f"✅ Model is EXCELLENT (mAP@50 = {pct(box.map50)})")
+        print("   Ready for deployment or demo.")
+    elif box.map50 >= 0.6:
+        print(f"⚠️ Model is GOOD (mAP@50 = {pct(box.map50)})")
+        print("   Minor gains possible with more data.")
     else:
-        print("⚠️ Could not extract detailed metrics from validation results.")
-    
+        print(f"❌ Model accuracy is LOW (mAP@50 = {pct(box.map50)})")
+        print("   Check dataset, labels, or class balance.")
+
     print_separator()
-    print("\n💡 Tips to improve accuracy:")
-    print("   1. Train for more epochs (current training may be insufficient)")
-    print("   2. Increase dataset size with more diverse images")
-    print("   3. Apply data augmentation during training")
-    print("   4. Balance class distribution in your dataset")
+    print("ℹ️ Notes:")
+    print(" • Always validate using the SAME YAML used for training")
+    print(" • Use best.pt, not last.pt")
+    print(" • More epochs alone will NOT fix data issues")
     print()
-    
+
     return 0
 
 
